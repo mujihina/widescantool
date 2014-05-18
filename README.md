@@ -1,5 +1,5 @@
 **Author:** Mujihina
-**Version:** v 1.2014.05.07
+**Version:** v 1.01
 
 # Widescantool #
 
@@ -96,7 +96,7 @@ For example, say you were trying to target all orcs, by using the pattern 'orc',
 
 ##Changelog##
 
-### v1.2014.05.07
-   Several changes/fixes
-### v1.2014.04.28 ###
+### v1.01
+   Made changes to fix what broke with recent changes to config.lua
+### v1.0 ###
 * First release.
