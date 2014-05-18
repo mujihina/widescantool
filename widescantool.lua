@@ -100,10 +100,14 @@ function load_defaults()
 
     -- Required since config now loads 'sets' as 'strings'
     for i,v in pairs (global.settings.area.alerts) do
-        global.settings.area.alerts[i] = S(global.settings.area.alerts[i]:split(', '))
+    	if (type (global.settings.area.alerts[i]) == 'string') then
+            global.settings.area.alerts[i] = S(global.settings.area.alerts[i]:split(', '))
+        end
     end
     for i,v in pairs (global.settings.area.filters) do
-        global.settings.area.filters[i] = S(global.settings.area.filters[i]:split(', '))
+        if (type (global.settings.area.filters[i]) == 'string') then
+            global.settings.area.filters[i] = S(global.settings.area.filters[i]:split(', '))
+        end
     end
     
     
