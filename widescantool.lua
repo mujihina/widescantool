@@ -407,7 +407,7 @@ function wst_process_packets (id, original, modified, injected, blocked)
     
     -- Process widescan replies
     if (id==0xF4) then
-        local p = global.packets.incoming(id, original)
+        local p = global.packets.parse ('incoming', original)
         local short_name = p['Name']
         local index = p['Index']
         local ID = 0x01000000 + (4096 * global.zone_id) + index
