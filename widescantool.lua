@@ -43,6 +43,11 @@ _addon.commands = {'wst'}
 -- resources.zones
 -- texts
 require ('luau')
+lib = {}
+lib.config = require ('config')
+lib.texts = require ('texts')
+lib.packets = require ('packets')
+lib.zones = require ('resources').zones
 
 -- Load Defaults
 function load_defaults()
@@ -54,13 +59,6 @@ function load_defaults()
     
     -- Main global structure
     global = {}
-    -- Required libs
-    global.config = require ('config')
-    global.skills = require ('resources').skills
-    global.texts = require ('texts')
-    global.packets = require ('packets')
-    global.zones = require ('resources').zones
-    
     global.defaults = {}
     global.defaults.world = {}
     global.defaults.world.alerts = S{}
@@ -111,7 +109,7 @@ function load_defaults()
     end
     
     
-    global.alertbox = global.texts.new (global.defaults.alertbox_default_string, global.settings.alertbox)
+    global.alertbox = lib.texts.new (global.defaults.alertbox_default_string, global.settings.alertbox)
 
     -- Performane configutables
     -- Only display global.max_memory_alerts on screen
@@ -135,7 +133,7 @@ end
 -- Save settings
 function save_settings()
     update_settings()
-    global.config.save(global.settings, 'all')
+    lib.config.save(global.settings, 'all')
 end
 
 
@@ -143,8 +141,8 @@ end
 function reset_to_default()
     global.enable_mode = true
     global.settings:reassign(global.defaults)
-    global.config.save(global.settings, 'all')
-    global.settings = global.config.load(global.settings_file, global.defaults)
+    lib.config.save(global.settings, 'all')
+    global.settings = lib.config.load(global.settings_file, global.defaults)
     update_settings()
     windower.add_to_chat (167, 'wst: All current and saved settings have been cleared')
 end
@@ -260,7 +258,7 @@ function wst_command (cmd, ...)
     if (cmd == 'laaf') then
         windower.add_to_chat (200, 'wst larf: Listing ALL area Filters')
         for i,_ in pairs (global.settings.area.filters) do
-            local area_name = global.zones[i].name
+            local area_name = lib.zones[i].name
             windower.add_to_chat (207, 'wst larf: Filters for %s: %s':format(area_name, global.settings.area.filters[i]:tostring()))
         end
         return
@@ -270,7 +268,7 @@ function wst_command (cmd, ...)
     if (cmd == 'laaa') then
         windower.add_to_chat (200, 'wst lara: Listing ALL area Alerts')
         for i,_ in pairs (global.settings.area.alerts) do
-            local area_name = global.zones[i].name
+            local area_name = lib.zones[i].name
             windower.add_to_chat (207, 'wst lara: Alerts for %s: %s':format(area_name, global.settings.area.alerts[i]:tostring()))
         end
         return
@@ -396,7 +394,7 @@ function update_area_info()
     if (not global) then load_defaults() return end
 
     global.zone_id = tostring(windower.ffxi.get_info().zone)
-    global.zone_name = global.zones[windower.ffxi.get_info().zone].name
+    global.zone_name = lib.zones[windower.ffxi.get_info().zone].name
     update_settings()
 end
 
@@ -407,7 +405,7 @@ function wst_process_packets (id, original, modified, injected, blocked)
     
     -- Process widescan replies
     if (id==0xF4) then
-        local p = global.packets.parse ('incoming', original)
+        local p = lib.packets.parse ('incoming', original)
         local short_name = p['Name']
         local index = p['Index']
         local ID = 0x01000000 + (4096 * global.zone_id) + index
