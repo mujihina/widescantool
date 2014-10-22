@@ -1,7 +1,7 @@
 --[[
 widescantool v1.04
 
-Copyright (c) 2014, Mujihina
+Copyright © 2014, Mujihina
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -494,7 +494,7 @@ function wst_process_packets (id, original, modified, injected, blocked)
             if (alert_count > global.max_memory_alerts) then break end
             local mob_name = v['name']
 --          if (mob_name and v['is_npc'] and v['valid_target'] and v['status'] == 0) then
-            if (mob_name and (global.show_invis or v['valid_target']) and v['status'] == 0) then
+            if (mob_name and (global.show_invalid or v['valid_target']) and v['status'] == 0) then
                 for i in global.combined_alerts:it() do
                     if (mob_name:lower():match("%s":format(i))) then
                         alert_count = alert_count + 1
