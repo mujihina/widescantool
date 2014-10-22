@@ -1,5 +1,5 @@
 --[[
-widescantool v1.02
+widescantool v1.04
 
 Copyright (c) 2014, Mujihina
 All rights reserved.
@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 _addon.name    = 'widescantool'
 _addon.author  = 'Mujihina'
-_addon.version = '1.02'
+_addon.version = '1.04'
 _addon.command = 'widescantool'
 _addon.commands = {'wst'}
 
@@ -49,6 +49,7 @@ lib.texts = require ('texts')
 lib.packets = require ('packets')
 lib.zones = require ('resources').zones
 
+
 -- Load Defaults
 function load_defaults()
     -- Do not load anything if we are not logged in
@@ -60,12 +61,11 @@ function load_defaults()
     -- Main global structure
     global = {}
     global.defaults = {}
-    global.defaults.world = {}
-    global.defaults.world.alerts = S{}
-    global.defaults.world.filters = S{}
-    global.defaults.area = {}
+    global.defaults.worldalerts = S{}
+    global.defaults.worldfilters = S{}
+    global.defaults.area = T{}
     global.defaults.filter_pets = true
-
+    -- alert textbox
     global.defaults.alertbox = {}
     global.defaults.alertbox.pos = {}
     global.defaults.alertbox.pos.x = (windower.get_windower_settings().ui_x_res / 2) - 50
@@ -89,29 +89,60 @@ function load_defaults()
     global.settings_file = "data/%s.xml":format(global.player_name)
     -- most common mob pet names
     global.pet_filters = S{"'s bat", "'s leech", "'s bats", "'s elemental", "'s spider", "'s tiger", "'s bee", "'s beetle", "'s rabbit"}
-
-    for _,i in pairs (lib.zones) do
-        global.defaults.area[i.id] = T{}
-        global.defaults.area[i.id]['name'] = i.name
-        global.defaults.area[i.id]['alerts'] = S{}
-        global.defaults.area[i.id]['filters'] = S{}
-    end
+   
     -- Load previous settings
     global.settings = config.load(global.settings_file, global.defaults)
-    
+
+    -- Hack: Required since config loads 'sets' as 'strings'
+    for _, i in global.settings.area:it() do
+        if (type (global.settings.area[i].alerts) == 'string') then
+            --print ("wst: adjusting alerts: strings -> set")
+            global.settings.area[i].alerts = S(global.settings.area[i].alerts:split(','))
+        elseif (class (global.settings.area[i].alerts) == 'Table') then
+            --print ("wst: adjusting alerts: table -> set")
+            local temp_set = S{}
+            for i,_ in pairs(global.settings.area[i].alerts) do
+                temp_set:add(i)
+            end
+            global.settings.area[i].alerts = temp_set
+        end
+        if (type (global.settings.area[i].filters) == 'string') then
+            print ("wst: adjusting filters: strings -> sets")
+            global.settings.area[i].filters = S(global.settings.area[i].filters:split(','))
+        elseif (class (global.settings.area[i].filters) == 'Table') then
+            --print ("wst: adjusting filters: table -> set")
+            local temp_set = S{}
+            for i,_ in pairs(global.settings.area[i].filters) do
+                temp_set:add(i)
+            end
+            global.settings.area[i].filters = temp_set            
+        end        
+    end
+    if (type (global.settings.worldfilters) == 'string') then
+        --print ("wst: adjusting world filters: string -> set")
+        global.settings.worldfilters = S(global.settings.worldfilters:split(','))
+    end
+    if (type (global.settings.worldalerts) == 'string') then
+        --print ("wst: adjusting world alerts: string -> set")
+        global.settings.worldalerts = S(global.settings.worldalerts:split(','))
+    end        
+       
     global.alertbox = lib.texts.new (global.defaults.alertbox_default_string, global.settings.alertbox)
 
     -- Performane configutables
     -- Only display global.max_memory_alerts on screen
-    global.max_memory_alerts = 3
+    global.max_memory_alerts = 6
     -- only look at mob array once every global.skip_memory_scans
     global.skip_memory_scans = 2
 
+    -- Extra Info
+    global.show_index      = false
+    global.show_invalid    = false
 
     global.combined_alerts = S{}
     global.combined_filters = S{}
     global.zone_name = ""
-    global.zone_id = ""
+    global.zone_id = 0
     global.enable_mode = true
     -- iterator
     global.memory_scan_i = global.skip_memory_scans - 1
@@ -180,6 +211,19 @@ function wst_command (cmd, ...)
     -- Force a zone update. Mostly for debugging.
     if (cmd == 'u') then update_area_info() return end
     
+    if (cmd == 'index') then 
+        print ("wst: toggling show_index")
+        global.show_index = not global.show_index
+        return
+    end
+    
+    if (cmd == 'invalid') then 
+        print ("wst: toggling show_invalid")
+        global.show_invalid = not global.show_invalid
+        return
+    end
+    
+    
     local args = L{...}
     
     -- Set to defaults
@@ -215,10 +259,11 @@ function wst_command (cmd, ...)
         return
     end
 
+
     -- List All Global settings
     if (cmd == 'lg') then
-        windower.add_to_chat (207, 'wst lg: Global filters: %s':format(global.settings.world.filters:tostring()))
-        windower.add_to_chat (207, 'wst lg: Global alerts: %s':format(global.settings.world.alerts:tostring()))
+        windower.add_to_chat (207, 'wst lg: Global filters: %s':format(global.settings.worldfilters:tostring()))
+        windower.add_to_chat (207, 'wst lg: Global alerts: %s':format(global.settings.worldalerts:tostring()))
         return
     end
     
@@ -231,15 +276,15 @@ function wst_command (cmd, ...)
     
     -- List All settings in current area
     if (cmd == 'la') then
-        if (global.settings.area[global.zone_id].filters) then
-            windower.add_to_chat (207, 'wst la: Filters for %s: %s':format (global.zone_name, global.settings.area[global.zone_id].filters:tostring()))
+        if (global.settings.area[global.zone_index].filters) then
+            windower.add_to_chat (207, 'wst la: Filters for %s: %s':format (global.zone_name, global.settings.area[global.zone_index].filters:tostring()))
         else
-            print ("WST: WARNING - zone id %d not found in zone list":format(global.zone_id))
+            print ("wst: zone id %d not found in config file":format(global.zone_id))
         end
-        if (global.settings.area[global.zone_id].alerts) then
-            windower.add_to_chat (207, 'wst la: Alerts for %s: %s':format (global.zone_name, global.settings.area[global.zone_id].alerts:tostring()))
+        if (global.settings.area[global.zone_index].alerts) then
+            windower.add_to_chat (207, 'wst la: Alerts for %s: %s':format (global.zone_name, global.settings.area[global.zone_index].alerts:tostring()))
         else
-            print ("WST: WARNING - zone id %d not found in zone list":format(global.zone_id))
+            print ("wst: zone id %d not found in config file":format(global.zone_id))
         end
         return
     end
@@ -247,9 +292,9 @@ function wst_command (cmd, ...)
     -- List All Area Filters
     if (cmd == 'laaf') then
         windower.add_to_chat (200, 'wst laaf: Listing ALL area Filters')
-        for i,_ in pairs (global.settings.area) do
+        for _, i in global.settings.area:it() do
             local area_name = lib.zones[i].name
-            windower.add_to_chat (207, 'wst laaf: Filters for %s: %s':format(area_name, global.settings.area[i].filters:tostring()))
+            windower.add_to_chat (207, 'wst laaf: Filters for %s: %s':format(area_name, global.settings.area['zone' .. i].filters:tostring()))
         end
         return
     end
@@ -257,9 +302,10 @@ function wst_command (cmd, ...)
     -- List All Area Alerts
     if (cmd == 'laaa') then
         windower.add_to_chat (200, 'wst laaa: Listing ALL area Alerts')
-        for i,_ in pairs (global.settings.area) do
+        for _, i in global.settings.area:it() do
+            log (i, type(i))
             local area_name = lib.zones[i].name
-            windower.add_to_chat (207, 'wst laaa: Alerts for %s: %s':format(area_name, global.settings.area[i].alerts:tostring()))
+            windower.add_to_chat (207, 'wst laaa: Alerts for %s: %s':format(area_name, global.settings.area['zone' .. i].alerts:tostring()))
         end
         return
     end
@@ -285,53 +331,57 @@ function wst_command (cmd, ...)
     -- Add Global Filter
     if (cmd == 'agf') then
         windower.add_to_chat (200, 'wst agf: Adding: \"%s\" to Global Filters':format(pattern))
-        global.settings.world.filters:add("%s":format(pattern))
-        windower.add_to_chat (207, 'wst agf: Current global filters: %s':format(global.settings.world.filters:tostring()))
+        global.settings.worldfilters:add("%s":format(pattern))
+        windower.add_to_chat (207, 'wst agf: Current global filters: %s':format(global.settings.worldfilters:tostring()))
         save_settings()
         return
     end
     -- Remove Global Filter
     if (cmd == 'rgf') then
         windower.add_to_chat (200, 'wst rgf: Removing \"%s\" from Global Filters':format(pattern))
-        global.settings.world.filters:remove("%s":format(pattern))
-        windower.add_to_chat (207, 'wst rgf: Current global filters: %s':format(global.settings.world.filters:tostring()))
+        global.settings.worldfilters:remove("%s":format(pattern))
+        windower.add_to_chat (207, 'wst rgf: Current global filters: %s':format(global.settings.worldfilters:tostring()))
         save_settings()
         return
     end
     -- Add Global Alert
     if (cmd == 'aga') then
         windower.add_to_chat (200, 'wst aga: Adding: \"%s\" to Global Alerts':format(pattern))
-        global.settings.world.alerts:add("%s":format(pattern))
-        windower.add_to_chat (207, 'wst aga: Current global alerts: %s':format(global.settings.world.alerts:tostring()))
+        global.settings.worldalerts:add("%s":format(pattern))
+        windower.add_to_chat (207, 'wst aga: Current global alerts: %s':format(global.settings.worldalerts:tostring()))
         save_settings()
         return
     end
     -- Remove Global Alert
     if (cmd == 'rga') then
         windower.add_to_chat (200, 'wst rga: Removing \"%s\" from Global Alerts':format(pattern))
-        global.settings.world.alerts:remove("%s":format(pattern))
-        windower.add_to_chat (207, 'wst rga: Current global alerts: %s':format(global.settings.world.alerts:tostring()))
+        global.settings.worldalerts:remove("%s":format(pattern))
+        windower.add_to_chat (207, 'wst rga: Current global alerts: %s':format(global.settings.worldalerts:tostring()))
         save_settings()
         return
     end
     -- Add Area Filter
     if (cmd == 'aaf') then
         windower.add_to_chat (200, 'wst aaf: Adding: \"%s\" to area Filters for %s':format(pattern, global.zone_name))
-        if (not global.settings.area[global.zone_id].filters) then
-            print ("WST: WARNING - zone id %d not found in zone list":format(global.zone_id))
-            global.settings.area[global.zone_id].filters = S{}
+        if (not global.settings.area[global.zone_index]) then
+            print ("wst: Adding %s to config file":format(global.zone_name))
+            global.settings.area[global.zone_index] = T{}
+            global.settings.area[global.zone_index].alerts  = S{}
+            global.settings.area[global.zone_index].filters = S{}
+            global.settings.area[global.zone_index].name = global.zone_name
+            
         end
-        global.settings.area[global.zone_id].filters:add("%s":format(pattern))
-        windower.add_to_chat (207, 'wst aaf: Current filters for %s: %s':format(global.zone_name, global.settings.area[global.zone_id].filters:tostring()))
+        global.settings.area[global.zone_index].filters:add("%s":format(pattern))
+        windower.add_to_chat (207, 'wst aaf: Current filters for %s: %s':format(global.zone_name, global.settings.area[global.zone_index].filters:tostring()))
         save_settings()
         return
     end
     -- Remove Area Filter
     if (cmd == 'raf') then
         windower.add_to_chat (200, 'wst raf: Removing: \"%s\" from area Filters for %s':format(pattern, global.zone_name))
-        if (global.settings.area[global.zone_id].filters) then
-            global.settings.area[global.zone_id].filters:remove("%s":format(pattern))
-            windower.add_to_chat (207, 'wst raf: Current filters for %s: %s':format(global.zone_name, global.settings.area[global.zone_id].filters:tostring()))
+        if (global.settings.area[global.zone_index] and global.settings.area[global.zone_index].filters) then
+            global.settings.area[global.zone_index].filters:remove("%s":format(pattern))
+            windower.add_to_chat (207, 'wst raf: Current filters for %s: %s':format(global.zone_name, global.settings.area[global.zone_index].filters:tostring()))
             save_settings()
         end
         return
@@ -339,25 +389,29 @@ function wst_command (cmd, ...)
     -- Add Area Alert
     if (cmd == 'aaa') then
         windower.add_to_chat (200, 'wst aaa: Adding: \"%s\" to area Alerts for %s':format(pattern, global.zone_name))
-        if (not global.settings.area[global.zone_id].alerts) then
-            print ("WST: WARNING - zone id %d not found in zone list":format(global.zone_id))
-            global.settings.area[global.zone_id].alerts = S{}
+        if (not global.settings.area[global.zone_index]) then
+            print ("wst: Adding %s to config file":format(global.zone_name))
+            global.settings.area[global.zone_index] = T{}
+            global.settings.area[global.zone_index].alerts  = S{}
+            global.settings.area[global.zone_index].filters = S{}
+            global.settings.area[global.zone_index].name = global.zone_name
         end
-        global.settings.area[global.zone_id].alerts:add("%s":format(pattern))
-        windower.add_to_chat (207, 'wst aaa: Current alerts for %s: %s':format(global.zone_name, global.settings.area[global.zone_id].alerts:tostring()))
+        global.settings.area[global.zone_index].alerts:add("%s":format(pattern))
+        windower.add_to_chat (207, 'wst aaa: Current alerts for %s: %s':format(global.zone_name, global.settings.area[global.zone_index].alerts:tostring()))
         save_settings()
         return
     end
     -- Remove Area Alert
     if (cmd == 'raa') then
         windower.add_to_chat(200, 'wst raa: Removing: \"%s\" from area Alerts for %s':format(pattern, global.zone_name))
-        if (global.settings.area[global.zone_id].alerts) then
-            global.settings.area[global.zone_id].alerts:remove("%s":format(pattern))
-            windower.add_to_chat (207, 'wst raa: Current alerts for %s: %s':format(global.zone_name, global.settings.area[global.zone_id].alerts:tostring()))
+        if (global.settings.area[global.zone_index] and global.settings.area[global.zone_index].alerts) then
+            global.settings.area[global.zone_index].alerts:remove("%s":format(pattern))
+            windower.add_to_chat (207, 'wst raa: Current alerts for %s: %s':format(global.zone_name, global.settings.area[global.zone_index].alerts:tostring()))
             save_settings()
         end
         return
     end
+
     
     -- Show Syntax
     windower.add_to_chat (167, 'wst: Check your syntax')
@@ -366,18 +420,16 @@ end
 
 -- calculate new sets with new area
 function update_settings()
-    global.combined_alerts = global.settings.world.alerts
-    global.combined_filters = global.settings.world.filters
-    
-    if (not global.settings.area[global.zone_id]) then
-        print ("WST: WARNING - zone id %d not found in zone list":format(global.zone_id))
-        return
-    end
-    if (global.settings.area[global.zone_id].alerts) then
-        global.combined_alerts = global.combined_alerts + global.settings.area[global.zone_id].alerts
-    end
-    if (global.settings.area[global.zone_id].filters) then
-        global.combined_filters = global.combined_filters + global.settings.area[global.zone_id].filters
+    global.combined_alerts = global.settings.worldalerts
+    global.combined_filters = global.settings.worldfilters
+
+    if (global.settings.area[global.zone_index]) then
+        if (global.settings.area[global.zone_index].alerts) then
+            global.combined_alerts = global.combined_alerts + global.settings.area[global.zone_index].alerts
+        end
+        if (global.settings.area[global.zone_index].filters) then
+            global.combined_filters = global.combined_filters + global.settings.area[global.zone_index].filters
+        end
     end
     if (global.settings.filter_pets) then
         global.combined_filters = global.pet_filters + global.combined_filters
@@ -390,7 +442,8 @@ function update_area_info()
     if (not global) then load_defaults() return end
 
     global.zone_id =  windower.ffxi.get_info().zone
-    global.zone_name = lib.zones[windower.ffxi.get_info().zone].name
+    global.zone_name = lib.zones[global.zone_id].name
+    global.zone_index = 'zone' .. global.zone_id
     update_settings()
 end
 
@@ -411,16 +464,18 @@ function wst_process_packets (id, original, modified, injected, blocked)
         local name_to_match = official_name:lower()
             
         -- Process filters
-        for i,_ in pairs (global.combined_filters) do
+        for i in global.combined_filters:it() do
             if (name_to_match:match("%s":format(i))) then
                 return true
             end
         end
         
         -- Process alerts
-        for i,_ in pairs (global.combined_alerts) do
+        for i in global.combined_alerts:it() do
             if (name_to_match:match("%s":format(i))) then
-                windower.add_to_chat(167, 'wst alert: %s detected!!':format(name_to_match))
+                local extra = ""
+                if (global.show_index) then extra = "(%s)":format(index:hex()) end
+                windower.add_to_chat(167, 'wst alert: %s detected!! %s':format(name_to_match, extra))
                 return
             end
         end
@@ -436,21 +491,25 @@ function wst_process_packets (id, original, modified, injected, blocked)
         local alert_count = 0
         local alert_list = L{}
         for _,v in pairs(mob_array) do
+            if (alert_count > global.max_memory_alerts) then break end
             local mob_name = v['name']
---            if (mob_name and v['is_npc'] and v['valid_target'] and v['status'] == 0) then
-            if (mob_name and v['valid_target'] and v['status'] == 0) then
-
-                for i,_ in pairs (global.combined_alerts) do
+--          if (mob_name and v['is_npc'] and v['valid_target'] and v['status'] == 0) then
+            if (mob_name and (global.show_invis or v['valid_target']) and v['status'] == 0) then
+                for i in global.combined_alerts:it() do
                     if (mob_name:lower():match("%s":format(i))) then
                         alert_count = alert_count + 1
                         -- If too many, just stop.
-                        if (alert_count >= global.max_memory_alerts) then
-                            global.alertbox:text ("%s\n%s":format(global.defaults.alertbox_default_string, "(many)"))
-                            global.alertbox:show()
-                            return
+                        if (alert_count > global.max_memory_alerts) then
+                            alert_list:append("+")
+                            --return
+                            break
                         end
-                        --alert_list:append("%s (%d)":format(mob_name, v['distance']:sqrt()))
-                        alert_list:append(mob_name)
+                          local index_string = ""
+                          if (global.show_index) then index_string = "(%s) ":format(v['index']:hex()) end
+                          local invalid_string = ""
+                          if (global.show_invalid and not v['valid_target']) then invalid_string = "(I)" end
+                          alert_list:append ("%s %s[%d]%s":format(mob_name, index_string, v['distance']:sqrt(), invalid_string))
+                          break
                     end
                 end
             end
