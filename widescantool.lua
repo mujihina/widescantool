@@ -129,7 +129,7 @@ function load_defaults()
        
     global.alertbox = lib.texts.new (global.defaults.alertbox_default_string, global.settings.alertbox)
 
-    -- Performane configutables
+    -- Performane configurables
     -- Only display global.max_memory_alerts on screen
     global.max_memory_alerts = 6
     -- only look at mob array once every global.skip_memory_scans
