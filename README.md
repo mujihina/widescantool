@@ -1,5 +1,5 @@
 **Author:** Mujihina
-**Version:** v 1.02
+**Version:** v 1.04
 
 # Widescantool #
 
@@ -55,6 +55,11 @@ weird-mithra namemaru
 
 However, it is not advisable to use characters not found in mob names. 
 
+## Configurables ##
+global.max_memory_alerts = Max number of alerts to display
+
+global.skip_memory_scans = Increase this number to scan memory less often.
+
 
 ### Examples ###
 
@@ -95,6 +100,12 @@ For example, say you were trying to target all orcs, by using the pattern 'orc',
 
 
 ##Changelog##
+
+### v1.04
+   Clean up and fix to changes to standard libs, added index and invalid toggles to show index and/or invalid targets
+
+### v1.03
+   Added max number of alerts, and performance configurable sttings for slower machines to tweak.
 
 ### v1.02
    Clean up and fix to changes to standard libs
