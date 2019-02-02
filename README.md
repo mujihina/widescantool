@@ -1,5 +1,5 @@
 **Author:** Mujihina
-**Version:** v 1.04
+**Version:** v 1.1
 
 # Widescantool #
 
@@ -42,6 +42,8 @@ Current syntax is:
 - wst defaults: Reset to default settings
 - wst toggle: Enable/Disable all filters/alerts temporarily
 - wst pet: Enable/Disable filtering of common mob pets
+- wst quiet: Enable quiet mode (no <call> alerts). Default.
+- wst noquiet: Use <call> alerts.
 
 ## Patterns ##
 
@@ -80,6 +82,11 @@ Adding the pattern emperor to the alerts for your current area:
 wst aaa emperor
 ```
 
+Adding the known id of a placeholder as an alert (rather than the name of mob):
+```
+wst aaa 0x0EE
+```
+
 Removing the previously added pattern damselfly from the filters for your current area:
 ```
 wst raf damselfly
@@ -101,6 +108,9 @@ For example, say you were trying to target all orcs, by using the pattern 'orc',
 
 ##Changelog##
 
+### v1.1
+   quiet/noquiet mode
+   Accept mob indexes as names.
 ### v1.04
    Clean up and fix to changes to standard libs, added index and invalid toggles to show index and/or invalid targets
 
