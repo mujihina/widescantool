@@ -1,7 +1,7 @@
 --[[
-widescantool v1.04
+widescantool v1.1
 
-Copyright © 2014, Mujihina
+Copyright © 2019, Mujihina
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 _addon.name    = 'widescantool'
 _addon.author  = 'Mujihina'
-_addon.version = '1.04'
+_addon.version = '1.2'
 _addon.command = 'widescantool'
 _addon.commands = {'wst'}
 
@@ -144,6 +144,8 @@ function load_defaults()
     global.zone_name = ""
     global.zone_id = 0
     global.enable_mode = true
+    global.quiet_mode = true
+    global.quiet_timer = 0
     -- iterator
     global.memory_scan_i = global.skip_memory_scans - 1
     
@@ -198,6 +200,8 @@ function show_syntax()
     windower.add_to_chat (207, '    \'wst defaults\': Reset to default settings')
     windower.add_to_chat (207, '    \'wst toggle\': Enable/Disable all filters/alerts temporarily')
     windower.add_to_chat (207, '    \'wst pet\': Enable/Disable filtering of common mob pets')
+    windower.add_to_chat (207, '    \'wst quiet\': No call alerts')
+    windower.add_to_chat (207, '    \'wst noquiet\': Use call alerts')
 end
 
 
@@ -244,6 +248,20 @@ function wst_command (cmd, ...)
             windower.add_to_chat (167, 'wst: filters/alerts are temporarily disabled')
             global.alertbox:hide()
         end
+        return
+    end
+
+   -- Quiet mode
+    if (cmd == 'quiet') then
+        global.quiet_mode = true
+        print('wst: quiet mode on')
+        return
+    end
+
+   -- Noquiet mode
+    if (cmd == 'noquiet') then
+        global.quiet_mode = false
+        print('wst: quiet mode off')
         return
     end
 
@@ -465,18 +483,27 @@ function wst_process_packets (id, original, modified, injected, blocked)
             
         -- Process filters
         for i in global.combined_filters:it() do
-            if (name_to_match:match("%s":format(i))) then
+            if (name_to_match:match('%s':format(i))) then
                 return true
             end
         end
         
         -- Process alerts
         for i in global.combined_alerts:it() do
-            if (name_to_match:match("%s":format(i))) then
-                local extra = ""
-                if (global.show_index) then extra = "(%s)":format(index:hex()) end
-                windower.add_to_chat(167, 'wst alert: %s detected!! %s':format(name_to_match, extra))
+            if (name_to_match:match('%s':format(i))) then
+                local extra = ''
+                local pos = '(%d,%d)':format(p['X Offset'], p['Y Offset'])
+                if (global.show_index) then extra = "(%.3X)":format(index) end
+                windower.add_to_chat(167, 'wst alert: %s detected!! %s %s':format(name_to_match, extra, pos))
                 return
+            end
+            if i:startswith('0x') then
+            	local hex_search = tonumber(i)
+            	local pos = '(%d,%d)':format(p['X Offset'], p['Y Offset'])
+            	--log('comparing %s, "%s", %.3X, "%s"':format(short_name, hex_search, index, index))
+            	if hex_search == index then
+            		windower.add_to_chat(167, 'wst alert: %s detected by id (%.3X) %s!!':format(name_to_match, index, pos))
+            	end
             end
         end
     end
@@ -493,24 +520,31 @@ function wst_process_packets (id, original, modified, injected, blocked)
         for _,v in pairs(mob_array) do
             if (alert_count > global.max_memory_alerts) then break end
             local mob_name = v['name']
---          if (mob_name and v['is_npc'] and v['valid_target'] and v['status'] == 0) then
             if (mob_name and (global.show_invalid or (v['valid_target'] and v['status'] == 0))) then
---            if (mob_name) then
                 for i in global.combined_alerts:it() do
-                    if (mob_name:lower():match("%s":format(i))) then
+                	local hex_search = tonumber(i)
+                    if mob_name:lower():match("%s":format(i)) or v['index'] == hex_search then
                         alert_count = alert_count + 1
+                        if not global.quiet_mode then
+                        	if global.quiet_timer > 0 then
+                        		global.quiet_timer = global.quiet_timer - 1
+                        	else
+                        		global.quiet_timer = 60
+                        		windower.send_command('input /p %s <call>':format(mob_name))
+                        	end
+                        end
                         -- If too many, just stop.
                         if (alert_count > global.max_memory_alerts) then
                             alert_list:append("+")
                             --return
                             break
                         end
-                          local index_string = ""
-                          if (global.show_index) then index_string = "(%s) ":format(v['index']:hex()) end
-                          local invalid_string = ""
-                          if (global.show_invalid and not v['valid_target']) then invalid_string = "(I)" end
-                          alert_list:append ("%s %s[%d]%s":format(mob_name, index_string, v['distance']:sqrt(), invalid_string))
-                          break
+                        local index_string = ""
+                        if (global.show_index) then index_string = "(%.3X) ":format(v['index']) end
+                        local invalid_string = ""
+                        if (global.show_invalid and not v['valid_target']) then invalid_string = "(I)" end
+                        alert_list:append ("%s %s[%d]%s":format(mob_name, index_string, v['distance']:sqrt(), invalid_string))
+                        break
                     end
                 end
             end
